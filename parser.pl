@@ -102,9 +102,9 @@ sub expression {
 
 
 my $p = new Parse::RecDescent( $grammar ) or die "Compile error\n";
-while ( 1 )
+while ( <> )
 {
-    chomp( $_ = <STDIN> );
+    chomp;
     my $result = $p->start( $_ );
 
     #print 'the result is: ', "$result\n";
