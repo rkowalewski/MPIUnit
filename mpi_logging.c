@@ -1,6 +1,6 @@
 #include <mpi.h>
 #include <stdio.h>
-#include "logging.h"
+#include "mpi_logging.h"
 
 int main(int argc, char** argv) {
   // Initialize the MPI environment
