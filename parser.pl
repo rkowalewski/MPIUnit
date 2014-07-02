@@ -80,7 +80,7 @@ my $grammar = <<'GRAMMAR';
           _rhs => $item[3]
         });
       }
-    relationalOpNum: /[<>]\=?/
+    relationalOpNum: /[<>]\=?|\={2}/
     relationalOpStr: /[gl][te]/
     prefix: / ^\w   #Leading alpha-numerical char
               \w*   #follow by optional alpha-numerical chars

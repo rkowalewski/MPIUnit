@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
+#include <stdlib.h>
 
 #ifndef LOGGING_H_
 #define LOGGING_H_
@@ -24,57 +25,116 @@
 #define _FIND_BY_ARGS(NAME, N, ...) __FIND_BY_ARGS(NAME, N, __VA_ARGS__)
 #define FIND_BY_ARGS(NAME, ...) _FIND_BY_ARGS(NAME, NARG2(__VA_ARGS__), __VA_ARGS__)
 
-#define EXPECT_EQ(...) FIND_BY_ARGS(expect_eq, __VA_ARGS__)
+#define EXPECT_EQ_INT(expected, actual) \
+  EXECUTE_ASSERT_FN(expect_eq, INT_##expected, INT_##actual)
 
-enum e_data_types {
-  STRING, INT
-};
+#define EXECUTE_ASSERT_FN(name, value1, value2) \
+  name(value1, value2);
 
-typedef struct GetValType
-{
-  char* name; //The parameter name
-  int rank; //The destination rank who had to put the value
-} GetValType;
+#define INT_VAL(...) \
+  VAL_INTERN(NARG2(__VA_ARGS__), INT, __VA_ARGS__)
 
-void expect_eq_nested(va_list argp) {
-  int expected_i;
-  GetValType *ptr;
-  int rank = va_arg(argp, int);
-  int type = va_arg(argp, enum e_data_types);
+#define VAL_INTERN(N, ...) \
+  createAssertionValue(N, __VA_ARGS__)
 
-  if (type == INT) {
-    expected_i = va_arg(argp, int);
-    ptr = va_arg(argp, GetValType *);
-    printf("Test%d: EXPECT_EQ(%d, GETVAL(\"%s\", %d))\n", rank, expected_i, ptr->name, ptr->rank);
+#define SETRANK(x) \
+  LOG_RANK = x;
+
+#define LOG_PREFIX "Test%d: "
+
+static unsigned int LOG_RANK = -1;
+
+typedef enum DataType_s {
+  INT, STRING
+} DataType;
+
+typedef struct AssertionValue_s {
+  int isLocal;
+  DataType type;
+  union {
+    int valInt;
+    char* valStr;
+    struct {
+      int rank;
+      char* param;
+    } distantSrc;
+  } uval;
+} AssertionValue;
+
+AssertionValue* createAssertionValue(int nargs, ...) {
+  if (nargs < 1) return NULL;
+
+  AssertionValue* assertionValue = (AssertionValue*) malloc(sizeof(AssertionValue));
+  if (assertionValue == NULL) return NULL;
+
+  va_list arguments;
+  va_start(arguments, nargs);
+
+  assertionValue->isLocal = nargs == 1;
+  assertionValue->type = va_arg(arguments, DataType);
+
+  if (assertionValue->isLocal) {
+    switch(assertionValue->type) {
+      case INT:
+        assertionValue->uval.valInt = va_arg(arguments, int);
+        break;
+      case STRING:
+        assertionValue->uval.valStr = va_arg(arguments, char*);
+        break;
+      default: break;
+    }
+  } else {
+    char* distantParam = va_arg(arguments, char*);
+    int rank = va_arg(arguments, int);
+    assertionValue->uval.distantSrc.param = distantParam;
+    assertionValue->uval.distantSrc.rank = rank;
   }
+
+  va_end(arguments);
+
+  return assertionValue;
 }
 
-void expected_eq_simple(va_list argp) {
-  int actual_i, expected_i;
-  int rank = va_arg(argp, int);
-  int type = va_arg(argp, enum e_data_types);
+void expect_eq(AssertionValue *expected, AssertionValue* actual) {
+  if (expected == NULL || actual == NULL) return;
 
-  if (type == INT) {
-    actual_i = va_arg(argp, int);
-    expected_i = va_arg(argp, int);
-    printf("Test%d: EXPECT_EQ(%d, %d)\n", rank, actual_i, expected_i);
+  if (expected->type != actual->type) {
+    //TODO better error handling
+    printf("Error! cannot compare different types\n");
+    return;
   }
-}
 
-void expect_eq(int n, ...) {
-  va_list argp;
-  va_start(argp, n);
-  switch(n) {
-    case 4:
-      expected_eq_simple(argp);
+  if (!(actual->isLocal) && !(expected->isLocal)) {
+    printf(LOG_PREFIX "EXPECT_TRUE(GETVAL(\"%s\", %d) == GETVAL(\"%s\"\", %d)\n", LOG_RANK, expected->uval.distantSrc.param, expected->uval.distantSrc.rank, actual->uval.distantSrc.param, actual->uval.distantSrc.rank);
+    return;
+  }
+
+  switch(expected->type){
+    case INT:
+      if (expected->isLocal) {
+        if (actual->isLocal) {
+          printf(LOG_PREFIX "EXPECT_TRUE(%d==%d)\n", LOG_RANK, expected->uval.valInt, actual->uval.valInt);
+        } else {
+          printf(LOG_PREFIX "EXPECT_TRUE(%d == GETVAL(\"%s\", %d)\n", LOG_RANK, expected->uval.valInt, actual->uval.distantSrc.param, actual->uval.distantSrc.rank);
+        }
+      } else {
+        printf(LOG_PREFIX "EXPECT_TRUE(GETVAL(\"%s\", %d) == %d\n", LOG_RANK, expected->uval.distantSrc.param, expected->uval.distantSrc.rank, actual->uval.valInt);
+      }
+      return;
+    case STRING:
+      if (expected->isLocal) {
+        if (actual->isLocal) {
+          printf(LOG_PREFIX "EXPECT_TRUE(%s==%s)\n", LOG_RANK, expected->uval.valStr, actual->uval.valStr);
+        } else {
+          printf(LOG_PREFIX "EXPECT_TRUE(%s == GETVAL(\"%s\", %d)\n", LOG_RANK, expected->uval.valStr, actual->uval.distantSrc.param, actual->uval.distantSrc.rank);
+        }
+      } else {
+        printf(LOG_PREFIX "EXPECT_TRUE(GETVAL(\"%s\", %d) == %s\n", LOG_RANK, expected->uval.distantSrc.param, expected->uval.distantSrc.rank, actual->uval.valStr);
+      }
       break;
-    case 5:
-      expect_eq_nested(argp);
-      break;
-    default:
-      printf("do nothing\n");
   }
-  va_end(argp);
-}
 
+  free(expected);
+  free(actual);
+}
 #endif

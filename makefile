@@ -8,4 +8,4 @@ mpi_logging: mpi_logging.c
 	${MPICC} -std=${STD} -o mpi_logging mpi_logging.c
 
 clean:
-	rm ${EXECS}
+	rm -f ${EXECS}
