@@ -6,30 +6,32 @@
 #ifndef LOGGING_H_
 #define LOGGING_H_
 
-#define EXPECT_GT(rank, actual, expected) \
-  printf("TEST%d: EXPECT_GT(%d, %d)\n", rank, actual, expected); \
-
-#define EXPECT_VALUE_IN_RANGE(rank, value, min, max) \
-  printf("TEST%d: EXPECT_TRUE(%d<=%d && %d<%d)\n", rank, min, value, value, max)
-
-#define GETVAL(parameter, rank)\
-   &((GetValType){parameter, rank}),1
-
-#define PUTVAL(rank, parameter, value, fmt) \
-  printf("TEST%d: PUTVAL(" #parameter "," #fmt ")\n", rank, value)
-
-
 #define _ARG2(_0, _1, _2, _3, _4, _5, ...) _5
 #define NARG2(...) _ARG2(__VA_ARGS__, 5, 4, 3, 2, 1, 0)
 #define __FIND_BY_ARGS(NAME, N, ...)  NAME(N, __VA_ARGS__)
 #define _FIND_BY_ARGS(NAME, N, ...) __FIND_BY_ARGS(NAME, N, __VA_ARGS__)
 #define FIND_BY_ARGS(NAME, ...) _FIND_BY_ARGS(NAME, NARG2(__VA_ARGS__), __VA_ARGS__)
 
+#define EXPECT_GT(rank, actual, expected) \
+  printf("TEST%d: EXPECT_GT(%d, %d)\n", rank, actual, expected); \
+
+#define EXPECT_VALUE_IN_RANGE(rank, value, min, max) \
+  printf("TEST%d: EXPECT_TRUE(%d<=%d && %d<%d)\n", rank, min, value, value, max)
+
+#define PUTVAL(parameter, value, fmt) \
+  printf(LOG_PREFIX "PUTVAL(" #parameter "," #fmt ")\n", LOG_RANK, value)
+
+#define LOG_BARRIER() \
+  printf(LOG_PREFIX "BARRIER\n", LOG_RANK)
+
+#define PUTVAL_INT(param, value) \
+  PUTVAL(param, value, %d)
+
 #define EXPECT_EQ_INT(expected, actual) \
   EXECUTE_ASSERT_FN(expect_eq, INT_##expected, INT_##actual)
 
-#define EXECUTE_ASSERT_FN(name, value1, value2) \
-  name(value1, value2);
+#define EXECUTE_ASSERT_FN(name, ...) \
+  name(__VA_ARGS__); \
 
 #define INT_VAL(...) \
   VAL_INTERN(NARG2(__VA_ARGS__), INT, __VA_ARGS__)
@@ -42,7 +44,7 @@
 
 #define LOG_PREFIX "Test%d: "
 
-static unsigned int LOG_RANK = -1;
+static signed int LOG_RANK = -1;
 
 typedef enum DataType_s {
   INT, STRING
@@ -96,7 +98,7 @@ AssertionValue* createAssertionValue(int nargs, ...) {
 }
 
 void expect_eq(AssertionValue *expected, AssertionValue* actual) {
-  if (expected == NULL || actual == NULL) return;
+  if (LOG_RANK < 0 || expected == NULL || actual == NULL) return;
 
   if (expected->type != actual->type) {
     //TODO better error handling
@@ -105,7 +107,7 @@ void expect_eq(AssertionValue *expected, AssertionValue* actual) {
   }
 
   if (!(actual->isLocal) && !(expected->isLocal)) {
-    printf(LOG_PREFIX "EXPECT_TRUE(GETVAL(\"%s\", %d) == GETVAL(\"%s\"\", %d)\n", LOG_RANK, expected->uval.distantSrc.param, expected->uval.distantSrc.rank, actual->uval.distantSrc.param, actual->uval.distantSrc.rank);
+    printf(LOG_PREFIX "EXPECT_TRUE(GETVAL(\"%s\", %d) == GETVAL(\"%s\"\", %d))\n", LOG_RANK, expected->uval.distantSrc.param, expected->uval.distantSrc.rank, actual->uval.distantSrc.param, actual->uval.distantSrc.rank);
     return;
   }
 
@@ -115,10 +117,10 @@ void expect_eq(AssertionValue *expected, AssertionValue* actual) {
         if (actual->isLocal) {
           printf(LOG_PREFIX "EXPECT_TRUE(%d==%d)\n", LOG_RANK, expected->uval.valInt, actual->uval.valInt);
         } else {
-          printf(LOG_PREFIX "EXPECT_TRUE(%d == GETVAL(\"%s\", %d)\n", LOG_RANK, expected->uval.valInt, actual->uval.distantSrc.param, actual->uval.distantSrc.rank);
+          printf(LOG_PREFIX "EXPECT_TRUE(%d == GETVAL(\"%s\", %d))\n", LOG_RANK, expected->uval.valInt, actual->uval.distantSrc.param, actual->uval.distantSrc.rank);
         }
       } else {
-        printf(LOG_PREFIX "EXPECT_TRUE(GETVAL(\"%s\", %d) == %d\n", LOG_RANK, expected->uval.distantSrc.param, expected->uval.distantSrc.rank, actual->uval.valInt);
+        printf(LOG_PREFIX "EXPECT_TRUE(GETVAL(\"%s\", %d) == %d)\n", LOG_RANK, expected->uval.distantSrc.param, expected->uval.distantSrc.rank, actual->uval.valInt);
       }
       return;
     case STRING:
@@ -126,10 +128,10 @@ void expect_eq(AssertionValue *expected, AssertionValue* actual) {
         if (actual->isLocal) {
           printf(LOG_PREFIX "EXPECT_TRUE(%s==%s)\n", LOG_RANK, expected->uval.valStr, actual->uval.valStr);
         } else {
-          printf(LOG_PREFIX "EXPECT_TRUE(%s == GETVAL(\"%s\", %d)\n", LOG_RANK, expected->uval.valStr, actual->uval.distantSrc.param, actual->uval.distantSrc.rank);
+          printf(LOG_PREFIX "EXPECT_TRUE(%s == GETVAL(\"%s\", %d))\n", LOG_RANK, expected->uval.valStr, actual->uval.distantSrc.param, actual->uval.distantSrc.rank);
         }
       } else {
-        printf(LOG_PREFIX "EXPECT_TRUE(GETVAL(\"%s\", %d) == %s\n", LOG_RANK, expected->uval.distantSrc.param, expected->uval.distantSrc.rank, actual->uval.valStr);
+        printf(LOG_PREFIX "EXPECT_TRUE(GETVAL(\"%s\", %d) == %s)\n", LOG_RANK, expected->uval.distantSrc.param, expected->uval.distantSrc.rank, actual->uval.valStr);
       }
       break;
   }
