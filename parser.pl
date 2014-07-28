@@ -8,9 +8,9 @@ $::RD_ERRORS = 1; # Make sure the parser dies when it encounters an error
 $::RD_WARN   = 1; # Enable warnings. This will warn on unused rules &c.
 $::RD_HINT   = 1; # Give out hints to help fix problems.
 
-my %resultTypes = {
-  PASS => 1, FAILURE => 2, DEFERRED => 3
-};
+#my $resultTypes = {
+#  PASS => 1, FAILURE => 2, DEFERRED => 3
+#};
 
 my $grammar = <<'GRAMMAR';
   {
@@ -24,14 +24,25 @@ my $grammar = <<'GRAMMAR';
     {
       $return = $item[3];
     }
-  disjunction: conjunction ('||' conjunction)(s?)
+  disjunction: conjunction ('||' conjunction {$item[2]})(s?)
     {
-      $return = $item[1];
+      my $conjunctions = {
+        start => $item[1],
+        operator => '||',
+        other => $item[2]
+      };
+
+      $return = main::booleanExpression($conjunctions);
     }
-  conjunction: compareExpression ('&&' compareExpression)(s?)
+  conjunction: compareExpression ('&&' compareExpression {$item[2]})(s?)
     {
-      # process other expressions
-      $return = $item[1];
+      my $conjunctions = {
+        start => $item[1],
+        operator => '&&',
+        other => $item[2]
+      };
+
+      $return = main::booleanExpression($conjunctions);
     }
   compareExpression: expression ((relationalOpStr | relationalOpNum) expression {[@item]})(?)
     {
@@ -40,11 +51,12 @@ my $grammar = <<'GRAMMAR';
       };
 
       #$item[2] is an array of array, where the nested array has 3 entries with rule, operator and expression
-      my @compareExpression = @{$item[2]};
+      my $compareExpression = $item[2];
 
-      if (scalar @compareExpression) {
-        $expHash->{operator} = $compareExpression[0][1];
-        $expHash->{actual} = $compareExpression[0][2];
+      # check if there is a compareExpression
+      if (scalar @{$compareExpression}) {
+        $expHash->{operator} = $compareExpression->[0]->[1];
+        $expHash->{actual} = $compareExpression->[0]->[2];
       }
 
       $return = main::compareExpression($expHash);
@@ -96,7 +108,16 @@ sub compareExpression {
 }
 
 sub booleanExpression {
+  my $boolExp = shift;
+  my @otherExpressions = @{$boolExp->{other}};
 
+  my $expressionStr = "$boolExp->{start}";
+
+  if (scalar @otherExpressions) {
+    $expressionStr = $expressionStr . " $boolExp->{operator} " . join(" $boolExp->{operator} ", @otherExpressions);
+  }
+
+  return eval $expressionStr || 0;
 }
 
 my $p = new Parse::RecDescent( $grammar ) or die "Compile error\n";
