@@ -13,20 +13,13 @@ use Expression;
 use SimpleValue;
 use Process;
 
-sub testRemoteAndSimpleValue {
-  my $remoteValue = RemoteValue->new(param=>"rank", value=>1);
-  my $simpleValue = SimpleValue->new(value=>1);
-
-  foreach my $key (keys %{$remoteValue}) {
-    print "key: $key, value: " . $remoteValue->{$key} ."\n";
-  }
-
-  print "The value is remote? " . $remoteValue->isRemote . "\n";
-  print "The value is remote? " . $simpleValue->isRemote . "\n";
-
-  my $expression = Expression->new(lhs => $simpleValue, operator => "==", rhs => $remoteValue);
-
-  print "The expression is remote? " .$expression->isRemote . "\n";
+sub testExpression {
+  my $expression = Expression->new(lhs=>10);
+  print "the result is: " . $expression->evaluate . "\n";
+  $expression = Expression->new(lhs=>10, operator=> "<=", rhs => 20);
+  print "the result is: " . $expression->evaluate . "\n";
+  $expression = Expression->new(lhs=>10, operator=> "<=", rhs => 5);
+  print "the result is: " . $expression->evaluate . "\n";
 }
 
 sub testProcess {
@@ -40,5 +33,5 @@ sub testProcess {
   print "The read rank is: $rank\n" if defined $rank;
 }
 
-testRemoteAndSimpleValue;
+testExpression;
 testProcess;

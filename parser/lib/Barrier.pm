@@ -24,7 +24,7 @@ sub value {
 
   $self->{$param} = $value if defined $value;
 
-  return (defined $self->{param}) ? $self->{param} : -1;
+  return $self->{$param};
 }
 
 1;

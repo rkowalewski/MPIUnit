@@ -23,7 +23,6 @@ sub putBarrierValue {
   my ($param, $value) = @_;
   my $writeIdx = $self->{writeIdx};
 
-  print "The args are: $param, $value, $writeIdx \n";
 
   unless (defined $self->{barriers}[$writeIdx]) {
     $self->{barriers}[$writeIdx] = Barrier->new;
@@ -40,15 +39,16 @@ sub fetchBarrierValue {
   my $readIdx = $self->{writeIdx} - 1;
 
   if ($readIdx == -1) {
-    return -1;
+    return 0;
   } else {
-    return $self->{barriers}[$readIdx]->value($param);
+    return $self->{barriers}[$readIdx]->value($param) || 0;
   }
 }
 
 sub newBarrier {
   my $self = shift;
   $self->{writeIdx} = $self->{writeIdx} + 1;
+  return 1;
 }
 
 1;
