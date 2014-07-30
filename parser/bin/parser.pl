@@ -21,23 +21,50 @@ $::RD_WARN   = 1; # Enable warnings. This will warn on unused rules.
 $::RD_HINT   = 1; # Give out hints to help fix problems.
 
 my $grammar = <<'GRAMMAR';
-  {
-    my $processId = -1;
-  }
+  start: prefix (assertion | barrier | putval)[$item[1]]
+    {
+      $return = {
+        processId => $item[1],
+        value => $item[2]
+      };
+    }
+  putval: /PUTVAL/i '(' string ',' simpleVal ')'
+    {
+      my $remoteValue = RemoteValue->new(
+        source => $arg[0],
+        param => $item{string},
+        value => $item{simpleVal}
+      );
 
-  start: prefix assertion
+      $return = {
+        type => uc $item[0],
+        value => $remoteValue
+      };
+    }
+  barrier: /BARRIER/i
+    {
+      $return = {
+        type => uc $item[0]
+      };
+    }
   assertion: expect_true
+    {
+      $return = {
+        type => uc $item[0],
+        assertion => $item[1]
+      };
+    }
   expect_true: /EXPECT_TRUE/i '(' disjunction ')'
     {
-      $return = $item[3];
+      $return = {
+        name => uc $item[0],
+        disjunctions => $item[3]
+      };
     }
   disjunction: conjunction ('||' conjunction {$item[2]})(s?)
     {
       my @concat = unshift @{$item[2]}, $item[1];
-      $return = {
-        processId => $processId,
-        disjunctions => \@concat
-      };
+      $return = \@concat;
     }
   conjunction: compareExpression ('&&' compareExpression {$item[2]})(s?)
     {
@@ -69,8 +96,7 @@ my $grammar = <<'GRAMMAR';
     {
       $return = RemoteValue->new(
         source => $item{number},
-        param => $item{string},
-        value => 1
+        param => $item{string}
       );
     }
   string: /['"]\w+['"]/
@@ -79,7 +105,8 @@ my $grammar = <<'GRAMMAR';
   relationalOpStr: /[gl][te]|eq|ne/
   prefix: /^test/i /\d+/ /:\s*/
     {
-      $processId = $item[2];
+      print "The processId is: $item[2]\n";
+      $return= $item[2];
     }
 GRAMMAR
 
@@ -103,17 +130,23 @@ sub compareExpression {
   return 1;
 }
 
-sub booleanExpression {
-  my $boolExp = shift;
-  my @otherExpressions = @{$boolExp->{other}};
+sub addBarrierValueToProcess {
+  my ($processId, $param, $value) = @_;
+  print "My ProcessId is: $processId\n";
+  print "My Param is: $param\n";
+  print "My Value is: $value\n";
 
-  my $expressionStr = "$boolExp->{start}";
-
-  if (scalar @otherExpressions) {
-    $expressionStr = $expressionStr . " $boolExp->{operator} " . join(" $boolExp->{operator} ", @otherExpressions);
+  unless (defined $REMOTE_VALS [ $processId ]) {
+    $REMOTE_VALS[$processId] = Process->new;
   }
 
-  return eval $expressionStr || 0;
+  return $REMOTE_VALS[$processId]->putBarrierValue($param, $value);
+}
+
+sub fetchBarrierValueFromProcess {
+  my ($processId, $param) = @_;
+  my $process = $REMOTE_VALS[$processId];
+  return (defined $process) ? $process->fetchBarrierValue($param) : -1;
 }
 
 my $p = new Parse::RecDescent( $grammar ) or die "Compile error\n";
@@ -122,9 +155,9 @@ while ( <> )
   chomp;
   my $result = $p->start( $_ );
 
-  print "The result is: $result" . "\n";
-  print "The processId is: " . $result->{processId} . "\n";
-  print "Disjunctions Count: " . scalar @{$result->{disjunctions}} . "\n";
+  #print "The result is: $result" . "\n";
+  #print "The processId is: " . $result->{processId} . "\n";
+  #print "Disjunctions Count: " . scalar @{$result->{disjunctions}} . "\n";
 
   #if (defined($result) && $result ne '' && $result ne '0') {
   # print join(' --> ', $_, "PASS\n");

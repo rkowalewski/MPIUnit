@@ -20,6 +20,7 @@ sub new {
 
 sub _init {
   my $self = shift;
+
   $self->{isRemote} = 1;
 }
 
@@ -28,7 +29,7 @@ sub param {
   return $self->{param};
 }
 
-sub sourceRank {
+sub source {
   my $self = shift;
   return $self->{source};
 }
