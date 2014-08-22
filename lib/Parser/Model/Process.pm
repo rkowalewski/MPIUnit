@@ -4,9 +4,9 @@ use strict;
 
 use File::Basename qw(dirname);
 use Cwd qw(abs_path);
-use lib dirname abs_path $0;
+use lib dirname dirname dirname abs_path $0;
 
-use Barrier;
+use Carp;
 
 sub new {
   my $class = shift;
@@ -23,12 +23,11 @@ sub putBarrierValue {
   my ($param, $value) = @_;
   my $writeIdx = $self->{writeIdx};
 
+  croak 'must specify a parameter name in putBarrierValue() at least!...' unless $param;
 
-  unless (defined $self->{barriers}[$writeIdx]) {
-    $self->{barriers}[$writeIdx] = Barrier->new;
-  }
+  $self->{barriers}[$writeIdx] = {} unless ($self->{barriers}[$writeIdx]);
 
-  $self->{barriers}[$writeIdx]->value($param, $value);
+  $self->{barriers}[$writeIdx]->{$param} = $value;
 
   return 1;
 }
@@ -36,16 +35,14 @@ sub putBarrierValue {
 sub fetchBarrierValue {
   my $self = shift;
   my $param = shift;
-  my $readIdx = $self->{writeIdx} - 1;
 
-  if ($readIdx == -1) {
-    return 0;
-  } else {
-    return $self->{barriers}[$readIdx]->value($param) || 0;
-  }
+  croak 'must specify a parameter name in putBarrierValue() at least!...' unless $param;
+
+  my $readIdx = $self->{writeIdx} - 1;
+  return ($readIdx > -1) ? $self->{barriers}[$readIdx]->{$param} || 0 : undef;
 }
 
-sub newBarrier {
+sub nextBarrier {
   my $self = shift;
   $self->{writeIdx} = $self->{writeIdx} + 1;
   return 1;
