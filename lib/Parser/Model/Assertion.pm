@@ -4,12 +4,7 @@ use warnings;
 use strict;
 use Carp;
 
-use constant {
-  REF_ASSERTION => 'Assertion',
-  REF_REMOTE_VALUE => 'RemoteValue'
-};
-
-use constant SUPPORTED_TYPES => join('|', qw (REF_ASSERTION REF_REMOTE_VALUE));
+use constant SUPPORTED_TYPES => join('|', qw (Assertion RemoteValue));
 use constant SUPPORTED_TYPES_REGEX => qr/^${\(SUPPORTED_TYPES)}$|^$/;
 
 # The items of an Assertion could either be Assertions or RemoteValues
@@ -23,9 +18,9 @@ sub new {
 
 sub _init {
   my $self = shift;
-  $self->{items} = [ ] unless ($self->{items} eq 'ARRAY');
+  $self->{items} = [ ] unless (ref ($self->{items}) eq 'ARRAY');
 
-  if (grep {(ref $_) !~ SUPPORTED_TYPES_REGEX} @{$self->{items}}) {
+  if (grep {(ref $_) !~ SUPPORTED_TYPES_REGEX} @{$self->{items}}){
     croak 'an Assertion may contain either simple scalars, RemoteValues, or other Assertions';
   }
 }
@@ -36,7 +31,7 @@ sub isRemote {
   return $self->{isRemote} if defined $self->{isRemote};
 
   foreach (@{$self->{items}}) {
-    $self->{isRemote} = $_->isRemote;
+    $self->{isRemote} = $_->isRemote if ref($_) ne '';
     last if $self->{isRemote};
   }
 
@@ -58,19 +53,19 @@ sub addItem {
 }
 
 sub collectRemoteIds {
-  my ($self, $affectedIds) = @_;
-  $affectedIds = [] unless $affectedIds;
+  my $self = shift;
+  my @remoteIds = ();
 
-  while (my $iter = each @{$self->{items}}) {
-    my $type = ref $iter;
+  foreach (@{$self->{items}}) {
+    my $type = ref $_;
     if ($type eq 'Assertion') {
-      $iter->affectedProcessIds($affectedIds);
+      @remoteIds = (@remoteIds, @{$_->collectRemoteIds});
     } elsif ($type eq 'RemoteValue') {
-      push @$affectedIds, $iter->source if $iter->source;
+      push @remoteIds, $_->source if defined $_->source;
     }
   }
 
-  return $affectedIds;
+  return \@remoteIds;
 }
 
 sub operator {

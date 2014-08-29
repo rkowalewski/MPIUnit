@@ -3,18 +3,21 @@
 use strict;
 use warnings;
 use Parse::RecDescent;
+use Data::Dumper;
 
-#add the lib directory to @INC
+#add lib directory to @INC
 use File::Basename qw(dirname);
 use Cwd qw(abs_path);
-use lib dirname (dirname abs_path $0) . '/lib';
+use lib dirname (dirname abs_path __FILE__) . '/lib';
+use Parser::Processor;
 
-my $parser = Parser::Processor->new;
+my $parser = Processor->new;
 while ( <> )
 {
   chomp;
 
   my $result = $parser->eval( $_ );
+  print Dumper($result);
   #my $actionResult = $result->{actionResult};
 
   if ($result) {
