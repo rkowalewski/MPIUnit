@@ -1,0 +1,16 @@
+Test0: EXPECT_TRUE(1==1)
+Test0: PUTVAL("nprocs",2)
+Test0: PUTVAL("myrank",0)
+Test0: BARRIER
+Test0: EXPECT_TRUE(2 == GETVAL("nprocs", 0))
+Test0: EXPECT_TRUE(0 == GETVAL("myrank", 0))
+Test0: EXPECT_TRUE(2 == GETVAL("nprocs", 1))
+Test0: EXPECT_TRUE(1 == GETVAL("myrank", 1))
+Test1: EXPECT_TRUE(1==1)
+Test1: PUTVAL("nprocs",2)
+Test1: PUTVAL("myrank",1)
+Test1: BARRIER
+Test1: EXPECT_TRUE(2 == GETVAL("nprocs", 0))
+Test1: EXPECT_TRUE(0 == GETVAL("myrank", 0))
+Test1: EXPECT_TRUE(2 == GETVAL("nprocs", 1))
+Test1: EXPECT_TRUE(1 == GETVAL("myrank", 1))
