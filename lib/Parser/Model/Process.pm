@@ -25,9 +25,9 @@ sub putBarrierValue {
 
   croak 'must specify a parameter name in putBarrierValue() at least!...' unless $param;
 
-  $self->{barriers}->[$writeIdx] = { isFlushed => 0, values => { } } unless ($self->{barriers}[$writeIdx]);
+  $self->{barriers}->[$writeIdx] = { } unless ($self->{barriers}[$writeIdx]);
 
-  $self->{barriers}->[$writeIdx]->{values}->{$param} = $value;
+  $self->{barriers}->[$writeIdx]->{$param} = $value;
 
   return {
     barrierIdx => $writeIdx,
@@ -38,19 +38,19 @@ sub putBarrierValue {
 
 sub isBarrierFlushed {
   my $self = shift;
-  my $barrierId = shift;
+  my $barrierIdx = shift;
 
-  return $self->{barriers}->[$barrierId]->{values}->{isFlushed} || 0;
+  return $self->{writeIdx} > $barrierIdx;
 }
 
 sub fetchBarrierValue {
-  my $self = shift;
-  my $param = shift;
+  my ($self, $param, $barrierIdx) = @_;
 
-  croak 'must specify a parameter name in putBarrierValue()!' unless $param;
+  croak "must specify both a 'parameter name' and a 'barrier index' in fetchBarrierValue()!" unless ($param || $barrierIdx);
 
-  my $readIdx = $self->{writeIdx} - 1;
-  return ($readIdx > -1) ? $self->{barriers}->[$readIdx]->{$param} || 0 : undef;
+  return undef unless ($self->isBarrierFlushed($barrierIdx));
+
+  return $self->{barriers}->[$barrierIdx]->{$param};
 }
 
 sub getBarrierReadIdx{

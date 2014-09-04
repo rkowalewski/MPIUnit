@@ -24,8 +24,6 @@ use constant {
   DEFERRED => 'DEFERRED'
 };
 
-my (@REMOTE_VALUES, @REMOTE_VALUES_TEMP);
-
 $::RD_ERRORS = 1; # Make sure the parser dies when it encounters an error
 $::RD_WARN   = 1; # Enable warnings. This will warn on unused rules.
 $::RD_HINT   = 1; # Give out hints to help fix problems.
@@ -110,7 +108,8 @@ GRAMMAR
 sub new {
   my $class = shift;
   my $self = {
-    processes => [ ]
+    processes => [ ],
+    deferredAssertions => [ ]
   };
   $self->{parser} = new Parse::RecDescent( $Grammar) or die "Compile error\n";
   bless $self, $class;
@@ -132,11 +131,11 @@ sub _evalInternal {
 
   return unless defined $expression;
 
-  my $processId = $expression->{processId};
+  my $currentProcess = $self->_getProcessById($expression->{processId});
 
   my $ret = {
     type => $expression->{type},
-    processId => $processId
+    processId => $expression->{processId}
   };
 
   my $type = $expression->{type};
@@ -144,37 +143,60 @@ sub _evalInternal {
   if ($type eq ASSERTION) {
     my $assertion = $expression->{parsedExpression};
     if ($assertion->isRemote) {
-      my @remoteIds = @{$assertion->collectRemoteIds};
+      my $barrierReadIdx = $currentProcess->getBarrierReadIdx;
+      my @requiredBarrierFlushes = grep {
+        !($self->_getProcessById($_)->isBarrierFlushed($barrierReadIdx))
+      } @{$assertion->collectRemoteIds};
 
+      if (@requiredBarrierFlushes) {
+        my $deferredAssertion = {
+          barrierIdx => $barrierReadIdx,
+          assertion => $assertion,
+          waitingForProcesses => [ @requiredBarrierFlushes ]
+        };
+
+        push (@{$self->{deferredAssertions}}, $deferredAssertion);
+        $ret->{resultType} = DEFERRED;
+        $ret->{resultValue} = $deferredAssertion;
+      } else {
+        $ret->{resultValue} = $self->_evalAssertion($assertion, $barrierReadIdx);
+        $ret->{resultType} = PROCESSED;
+      }
     } else {
-      $ret->{resultValue} = _evalLocalAssertion($assertion);
+      $ret->{resultValue} = $self->_evalAssertion($assertion);
       $ret->{resultType} = PROCESSED;
     }
   } elsif ($type eq PUTVAL) {
-    #create new Process if it does not exist
-    my $process = $self->_getProcessId($processId);
     my $valueTuple = $expression->{valueTuple};
-    $ret->{resultValue} = $process->putBarrierValue($valueTuple->{param}, $valueTuple->{value});
+    $ret->{resultValue} = $currentProcess->putBarrierValue($valueTuple->{param}, $valueTuple->{value});
     $ret->{resultType} = PROCESSED;
   } elsif ($type eq BARRIER) {
-    my $process = $self->_getProcessId($processId);
     $ret->{resultType} = PROCESSED;
-    $ret->{resultValue} = $process->nextBarrier;
+    $ret->{resultValue} = $currentProcess->nextBarrier;
+    $self->_evalDeferredAssertions($currentProcess->getBarrierReadIdx, $expression->{processId});
   }
 
   return $ret;
 }
 
-sub _evalLocalAssertion {
-  my $assertion = shift;
+sub _evalAssertion {
+  my ($self, $assertion, $remoteBarrierIdx) = @_;
 
   my $items = $assertion->items;
 
   # filter all nested assertions and evaluate recursive
-  my @nestedAssertionsIdx = grep { ref ($items->[$_]) =~ /^Assertion$/} 0..$#{$items};
+  my @nestedAssertionsIdx = _filterIdxByReftype($items, 'Assertion');
 
   foreach(@nestedAssertionsIdx) {
-    $items->[$_] = _evalLocalAssertion($items->[$_]);
+    $items->[$_] = $self->_evalAssertion($items->[$_], $remoteBarrierIdx);
+  }
+
+  # resolve remote values
+  my @remoteValuesIdx = _filterIdxByReftype($items, 'RemoteValue');
+  foreach(@remoteValuesIdx) {
+    my $remoteValue = $items->[$_];
+    my $remoteProcess = $self->_getProcessById($remoteValue->source);
+    $items->[$_] = $remoteProcess->fetchBarrierValue($remoteValue->param, $remoteBarrierIdx);
   }
 
   # build expression string and return result
@@ -182,7 +204,40 @@ sub _evalLocalAssertion {
   return eval $expression || 0;
 }
 
-sub _getProcessId {
+sub _evalDeferredAssertions {
+  my ($self, $barrierIdx, $processId) = @_;
+  my $deferredAssertions = $self->{deferredAssertions};
+
+  my @candidatesIdx = grep { $deferredAssertions->[$_]->{barrierIdx} == $barrierIdx} 0..$#{$deferredAssertions };
+  my @resolved = ();
+
+  foreach(@candidatesIdx) {
+    my $deferredAssertion = $deferredAssertions->[$_];
+    my $waitingFor = $deferredAssertion->{waitingForProcesses};
+
+    my @removeIdx = grep { $waitingFor->[$_] == $processId } 0..$#{$waitingFor};
+    while (my ($idx, $waitingForProcessId) = each (@removeIdx)) {
+      splice(@$waitingFor, $waitingForProcessId - $idx, 1);
+    }
+
+    unless (@$waitingFor) {
+      $self->_evalAssertion($deferredAssertion->{assertion}, $barrierIdx);
+      push @resolved, $_;
+    }
+  }
+
+  return @resolved;
+}
+
+sub _filterIdxByReftype {
+  my $items = shift;
+  my $type = shift;
+  my $regex = qr/^${\($type)}$/;
+
+  return grep { ref ($items->[$_]) =~ m{$regex} } 0..$#{$items} || ();
+}
+
+sub _getProcessById {
   my $self = shift;
   my $processId = shift;
   $self->{processes}->[$processId] = Process->new unless $self->{processes}->[$processId];
