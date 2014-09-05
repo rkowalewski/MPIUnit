@@ -2,7 +2,6 @@
 
 use strict;
 use warnings;
-use Parse::RecDescent;
 use Data::Dumper;
 
 #add lib directory to @INC
@@ -18,16 +17,10 @@ while ( <> )
 
   my $result = $parser->eval( $_ );
   print Dumper($result);
-  #my $actionResult = $result->{actionResult};
 
   if ($result) {
-    #my $evalRes = checkResultNotEmpty($actionResult->{value});
 
-    #if ($actionResult->{type} eq ASSERTION) {
-    #   print join (' --> ', $_, $evalRes ? "PASS\n" : "FAILURE\n");
-    # } elsif ($actionResult->{type} eq BARRIER) {
-    #   print "Log Barrier added for process with id: $processId\n" if $evalRes;
-    # }
+
   } else {
     print "Invalid Syntax\n";
   }
