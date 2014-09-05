@@ -135,7 +135,7 @@ sub _evalInternal {
 
   my $ret = {
     type => $expression->{type},
-    processId => $expression->{processId}
+    processId => $expression->{processId},
   };
 
   my $type = $expression->{type};
@@ -160,21 +160,21 @@ sub _evalInternal {
         $ret->{resultValue} = $deferredAssertion;
       } else {
         $ret->{resultValue} = $self->_evalAssertion($assertion, $barrierReadIdx);
-        $ret->{resultType} = PROCESSED;
       }
     } else {
       $ret->{resultValue} = $self->_evalAssertion($assertion);
-      $ret->{resultType} = PROCESSED;
     }
   } elsif ($type eq PUTVAL) {
     my $valueTuple = $expression->{valueTuple};
     $ret->{resultValue} = $currentProcess->putBarrierValue($valueTuple->{param}, $valueTuple->{value});
-    $ret->{resultType} = PROCESSED;
   } elsif ($type eq BARRIER) {
-    $ret->{resultType} = PROCESSED;
     $ret->{resultValue} = $currentProcess->nextBarrier;
-    $self->_evalDeferredAssertions($currentProcess->getBarrierReadIdx, $expression->{processId});
+    # evaluate assertions wating for this barrier to be flushed
+    my @resolvedDeferred = $self->_evalDeferredAssertions($currentProcess->getBarrierReadIdx, $expression->{processId});
+    $ret->{resolvedDeferredCount} = scalar @resolvedDeferred;
   }
+
+  $ret->{resultType} = PROCESSED unless ($ret->{resultType});
 
   return $ret;
 }
@@ -215,7 +215,7 @@ sub _evalDeferredAssertions {
     my $deferredAssertion = $deferredAssertions->[$_];
     my $waitingFor = $deferredAssertion->{waitingForProcesses};
 
-    my @removeIdx = grep { $waitingFor->[$_] == $processId } 0..$#{$waitingFor};
+    my @removeIdx = grep ($waitingFor->[$_] == $processId, 0..$#{$waitingFor});
     while (my ($idx, $waitingForProcessId) = each (@removeIdx)) {
       splice(@$waitingFor, $waitingForProcessId - $idx, 1);
     }
