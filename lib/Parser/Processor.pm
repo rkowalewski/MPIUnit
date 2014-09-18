@@ -29,7 +29,7 @@ $::RD_WARN   = 1; # Enable warnings. This will warn on unused rules.
 $::RD_HINT   = 1; # Give out hints to help fix problems.
 
 my $Grammar = <<'GRAMMAR';
-  start: prefix (assertion | barrier | putval)
+  start: prefix (assertion | barrier | putval) /\Z/
     {
       $return = $item[2];
       $return->{processId} = $item{prefix};
